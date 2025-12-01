@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HumanDex - 人類圖鑑</title>
+    <title>HumanDex - 人類圖鑑 (Social Ver.)</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,9 +41,10 @@
         /* 標題區 */
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border-bottom: 4px solid #fff;
             padding-bottom: 20px;
+            position: relative;
         }
         .logo {
             font-family: var(--font-en);
@@ -51,6 +52,20 @@
             color: #f7d51d;
             text-shadow: 4px 4px #000;
             margin-bottom: 10px;
+        }
+
+        /* 使用者 ID 顯示區 */
+        .user-identity {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 0.7rem;
+            background: #000;
+            color: #f7d51d;
+            padding: 5px 10px;
+            border: 2px solid #fff;
+            font-family: var(--font-en);
+            transform: rotate(2deg);
         }
 
         /* 控制面板 */
@@ -91,7 +106,7 @@
         }
         .human-card:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
 
-        /* Rank Badge: 顯示 NO.xxx */
+        /* Rank Badge */
         .rank-badge {
             position: absolute;
             top: -12px;
@@ -106,7 +121,6 @@
             box-shadow: 3px 3px 0 #000;
         }
 
-        /* 卡片頭部：佈局修正 */
         .card-header {
             display: flex;
             gap: 15px;
@@ -136,6 +150,13 @@
             font-size: 1.1rem;
             font-weight: 900;
             line-height: 1.2;
+            margin-top: 2px;
+        }
+        
+        /* 發現者標示 */
+        .finder-name {
+            font-size: 0.6rem;
+            color: #666;
             margin-top: 2px;
         }
 
@@ -184,7 +205,7 @@
 
         .vote-btn { width: 100%; font-family: var(--font-zh); font-weight: bold; margin-bottom: 5px; }
         
-        /* --- 新增：留言區樣式 --- */
+        /* 留言區樣式 */
         .comments-section {
             margin-top: 15px;
             border-top: 2px dashed #ccc;
@@ -197,7 +218,7 @@
             color: #555;
         }
         .comment-list {
-            max-height: 80px;
+            max-height: 120px;
             overflow-y: auto;
             background: #f0f0f0;
             padding: 5px;
@@ -206,13 +227,19 @@
             border: 2px solid #ddd;
         }
         .comment-item {
-            padding: 4px 0;
+            padding: 6px 0;
             border-bottom: 1px dashed #ccc;
             word-break: break-all;
             color: #333;
             text-align: left;
         }
         .comment-item:last-child { border-bottom: none; }
+        
+        .comment-user {
+            font-weight: bold;
+            color: #000;
+            margin-right: 5px;
+        }
         
         .comment-input-row {
             display: flex;
@@ -242,6 +269,7 @@
             max-height: 90vh; overflow-y: auto; border: 4px solid #000;
         }
 
+        /* 顏色樣式 */
         .is-toxic .nes-progress::-webkit-progress-value { background-color: var(--toxic-color); }
         .is-toxic .nes-progress::-moz-progress-bar { background-color: var(--toxic-color); }
         .is-toxic .nes-progress { color: var(--toxic-color); }
@@ -252,6 +280,7 @@
         @media (max-width: 600px) {
             .filters-row { flex-direction: column; }
             .category-group, .sort-group { justify-content: center; }
+            .header { margin-top: 30px; } /* 給右上角 ID 空間 */
         }
     </style>
 </head>
@@ -259,6 +288,9 @@
 
 <div class="container">
     <header class="header">
+        <!-- 顯示使用者身分 -->
+        <div class="user-identity" id="user-identity-display">載入中...</div>
+
         <div class="logo">
             <i class="nes-icon coin is-large"></i> HumanDex
         </div>
@@ -285,11 +317,13 @@
             </div>
         </div>
         <div style="margin-top: 15px; font-size: 0.8rem; text-align: right;">
-            圖鑑收錄: <span id="total-count" class="retro-font">0</span>
+            圖鑑收錄: <span id="total-count" class="retro-font">...</span>
         </div>
     </div>
 
-    <div id="dex-grid" class="dex-grid"></div>
+    <div id="dex-grid" class="dex-grid">
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px;">正在連線到資料庫...</div>
+    </div>
 </div>
 
 <button type="button" class="nes-btn is-success fab" onclick="openModal()"><span>+ 捕捉</span></button>
@@ -343,9 +377,49 @@
     </div>
 </div>
 
-<script>
-    const STORAGE_KEY = 'humanDex_v4_comments'; // 更新 Key 以避免舊資料結構問題
+<!-- FIREBASE SCRIPT -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import { 
+        getFirestore, 
+        collection, 
+        addDoc, 
+        updateDoc, 
+        doc, 
+        onSnapshot, 
+        query, 
+        orderBy,
+        increment,
+        arrayUnion
+    } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCbzIeGUujVgyWl8oQHXXg2YVY7sIG1YHw",
+      authDomain: "humandex-e4dba.firebaseapp.com",
+      projectId: "humandex-e4dba",
+      storageBucket: "humandex-e4dba.firebasestorage.app",
+      messagingSenderId: "630070610420",
+      appId: "1:630070610420:web:d83172471ee474a2f611a1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const COLLECTION_NAME = "humans";
+
     let humanList = [];
+    
+    // --- 0. 身分系統 (Identity System) ---
+    // 自動產生或讀取使用者代號
+    let currentUser = localStorage.getItem('humandex_user');
+    if (!currentUser) {
+        // 隨機產生 4 位數代號
+        const randomId = Math.floor(1000 + Math.random() * 9000);
+        currentUser = `調查員 #${randomId}`;
+        localStorage.setItem('humandex_user', currentUser);
+    }
+    // 顯示在右上角
+    document.getElementById('user-identity-display').innerText = `ID: ${currentUser}`;
+
 
     const CAT_MAP = {
         'work': '職場版',
@@ -355,67 +429,27 @@
         'other': '綜合版'
     };
 
-    const seedData = [
-        {
-            id: 1700000000001,
-            name: "情緒勒索怪",
-            category: "family",
-            type: "toxic",
-            level: 95,
-            traits: ["我是為你好", "易怒", "雙重標準"],
-            story: "每次回家如果不照他的意思做，就開始摔東西，然後說自己養家多辛苦，都是為了我好。",
-            votes: 1240,
-            comments: ["真的，我家那個也是這樣！", "辛苦了..."], // 種子資料示範
-            timestamp: 1700000000001
-        },
-        {
-            id: 1700000000002,
-            name: "天使房東",
-            category: "other",
-            type: "good",
-            level: 100,
-            traits: ["不漲房租", "修繕秒回", "送水果"],
-            story: "疫情期間主動說這兩個月房租減半，還會定時放水果在門口，根本是活菩薩。",
-            votes: 89,
-            comments: ["哪裡有這種房東求介紹"],
-            timestamp: 1700000000002
-        },
-        {
-            id: 1700000000003,
-            name: "薪水小偷",
-            category: "work",
-            type: "toxic",
-            level: 60,
-            traits: ["消失", "推卸責任", "裝忙"],
-            story: "只要主管不在位置上，他就會消失去廁所或是茶水間，一消失就是半小時。",
-            votes: 450,
-            comments: [],
-            timestamp: 1700000000003
-        }
-    ];
-
-    window.onload = function() {
-        loadData();
+    // --- 監聽資料庫 ---
+    const q = query(collection(db, COLLECTION_NAME), orderBy("timestamp", "desc"));
+    
+    onSnapshot(q, (snapshot) => {
+        humanList = [];
+        snapshot.forEach((doc) => {
+            humanList.push({ id: doc.id, ...doc.data() });
+        });
+        document.getElementById('total-count').innerText = humanList.length;
         applyFilters();
-    };
+    }, (error) => {
+        console.error("Error:", error);
+    });
 
-    function loadData() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        humanList = stored ? JSON.parse(stored) : seedData;
-        if (!stored) saveData();
-    }
-
-    function saveData() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(humanList));
-    }
-
+    // --- 渲染 ---
     function renderGrid(data) {
         const grid = document.getElementById('dex-grid');
-        document.getElementById('total-count').innerText = data.length;
         grid.innerHTML = '';
 
         if (data.length === 0) {
-            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px;">找不到相關人類...</div>';
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px;">暫無資料...</div>';
             return;
         }
 
@@ -427,18 +461,35 @@
             
             const absoluteRank = chronologicalList.findIndex(h => h.id === human.id) + 1;
             const rankNum = String(absoluteRank).padStart(3, '0');
-
             const avatarUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(human.name)}`;
-            
             const traitsHtml = human.traits.map(t => 
                 `<span class="trait-tag" onclick="searchByTag('${escapeHtml(t)}')">#${escapeHtml(t)}</span>`
             ).join('');
 
-            // --- 留言 HTML 產生邏輯 ---
-            const comments = human.comments || []; // 防呆
-            const commentsHtml = comments.length > 0
-                ? comments.map(c => `<div class="comment-item">User: ${escapeHtml(c)}</div>`).join('')
-                : '<div style="color:#999; padding:2px;">尚無留言...</div>';
+            // 處理作者 (新舊資料相容)
+            const authorText = human.author ? `由 ${escapeHtml(human.author)} 發現` : '由 匿名調查員 發現';
+
+            // 處理留言 (新舊資料相容)
+            const comments = human.comments || [];
+            let commentsHtml = '';
+
+            if (comments.length > 0) {
+                commentsHtml = comments.map(c => {
+                    // 判斷是新版物件格式還是舊版字串格式
+                    if (typeof c === 'object' && c !== null) {
+                        return `
+                        <div class="comment-item">
+                            <span class="comment-user">${escapeHtml(c.user)}:</span>
+                            <span>${escapeHtml(c.text)}</span>
+                        </div>`;
+                    } else {
+                        // 舊版純文字
+                        return `<div class="comment-item"><span class="comment-user">匿名:</span> ${escapeHtml(c)}</div>`;
+                    }
+                }).join('');
+            } else {
+                commentsHtml = '<div style="color:#999; padding:2px;">尚無留言...</div>';
+            }
 
             const cardHTML = `
                 <div class="nes-container human-card ${isToxic ? 'is-toxic' : 'is-good'}">
@@ -448,6 +499,7 @@
                         <img src="${avatarUrl}" class="avatar" alt="avatar">
                         <div class="info-col">
                             <div class="human-name">${escapeHtml(human.name)}</div>
+                            <div class="finder-name">${authorText}</div>
                             <div class="badge-row">
                                 <span class="custom-tag tag-category">${catName}</span>
                                 <span class="custom-tag ${isToxic ? 'tag-toxic' : 'tag-good'}">
@@ -468,19 +520,18 @@
                     <div class="traits-container">${traitsHtml}</div>
                     <div class="story-box">"${escapeHtml(human.story)}"</div>
 
-                    <button class="nes-btn ${isToxic ? 'is-warning' : 'is-primary'} vote-btn" onclick="vote(${human.id})">
+                    <button class="nes-btn ${isToxic ? 'is-warning' : 'is-primary'} vote-btn" onclick="vote('${human.id}')">
                         ${isToxic ? '💩 我也遇過' : '❤️ 讚嘆好人'} <span class="retro-font">(${human.votes})</span>
                     </button>
 
-                    <!-- 留言區塊 -->
                     <div class="comments-section">
                         <div class="comments-title">留言板 (${comments.length})</div>
-                        <div class="comment-list" id="list-${human.id}">
+                        <div class="comment-list">
                             ${commentsHtml}
                         </div>
                         <div class="comment-input-row">
                             <input type="text" id="input-${human.id}" class="nes-input" placeholder="留個言...">
-                            <button class="nes-btn is-primary comment-btn" onclick="addComment(${human.id})">送出</button>
+                            <button class="nes-btn is-primary comment-btn" onclick="addComment('${human.id}')">送出</button>
                         </div>
                     </div>
                 </div>
@@ -512,34 +563,73 @@
     }
 
     function handleSearch(e) { if (e.key === 'Enter') applyFilters(); }
+    
     function searchByTag(tag) {
         document.getElementById('search-input').value = tag;
         applyFilters();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function vote(id) {
-        const target = humanList.find(h => h.id === id);
-        if (target) {
-            target.votes += 1;
-            saveData();
-            applyFilters();
+    // --- 新增卡片 (包含作者 ID) ---
+    async function saveHuman() {
+        const name = document.getElementById('input-name').value;
+        const story = document.getElementById('input-story').value;
+        const traitsStr = document.getElementById('input-traits').value;
+        const level = parseInt(document.getElementById('input-level').value);
+        const type = document.querySelector('input[name="type-choice"]:checked').value;
+        const category = document.getElementById('input-category').value;
+
+        if (!name || !story) return alert("請輸入完整資料！");
+
+        const newHuman = {
+            name, category, type, level, story,
+            traits: traitsStr.split(/[,，]/).map(t => t.trim()).filter(t => t),
+            votes: 1,
+            comments: [],
+            timestamp: Date.now(),
+            author: currentUser // 加入作者資訊
+        };
+
+        try {
+            await addDoc(collection(db, COLLECTION_NAME), newHuman);
+            alert("成功發布！");
+            closeModal();
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            alert("發布失敗，請檢查網路連線。");
         }
     }
 
-    // --- 新增：處理留言功能 ---
-    function addComment(id) {
+    async function vote(id) {
+        const humanRef = doc(db, COLLECTION_NAME, id);
+        try {
+            await updateDoc(humanRef, { votes: increment(1) });
+        } catch (e) { console.error(e); }
+    }
+
+    // --- 新增留言 (包含留言者 ID) ---
+    async function addComment(id) {
         const inputEl = document.getElementById(`input-${id}`);
         const text = inputEl.value.trim();
+        if (!text) return;
 
-        if (!text) return; // 空白不送出
+        const humanRef = doc(db, COLLECTION_NAME, id);
+        
+        // 建立留言物件
+        const commentObj = {
+            text: text,
+            user: currentUser, // 加入留言者身分
+            createdAt: Date.now()
+        };
 
-        const target = humanList.find(h => h.id === id);
-        if (target) {
-            if (!target.comments) target.comments = []; // 初始化
-            target.comments.push(text);
-            saveData();
-            applyFilters(); // 重新渲染更新
+        try {
+            await updateDoc(humanRef, {
+                comments: arrayUnion(commentObj)
+            });
+            inputEl.value = '';
+        } catch (e) {
+            console.error("Comment failed: ", e);
+            alert("留言失敗");
         }
     }
 
@@ -551,37 +641,20 @@
         document.getElementById('input-story').value = '';
     }
 
-    function saveHuman() {
-        const name = document.getElementById('input-name').value;
-        const story = document.getElementById('input-story').value;
-        const traitsStr = document.getElementById('input-traits').value;
-        const level = parseInt(document.getElementById('input-level').value);
-        const type = document.querySelector('input[name="type-choice"]:checked').value;
-        const category = document.getElementById('input-category').value;
-
-        if (!name || !story) return alert("請輸入資料！");
-
-        const newHuman = {
-            id: Date.now(),
-            name, category, type, level, story,
-            traits: traitsStr.split(/[,，]/).map(t => t.trim()).filter(t => t),
-            votes: 1,
-            comments: [], // 新增時初始化 comments
-            timestamp: Date.now()
-        };
-
-        humanList.push(newHuman);
-        saveData();
-        closeModal();
-        
-        document.querySelector('input[value="all"]').checked = true;
-        document.querySelector('input[value="new"]').checked = true;
-        applyFilters();
-    }
-
     function escapeHtml(text) {
-        return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : '';
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
+
+    window.applyFilters = applyFilters;
+    window.handleSearch = handleSearch;
+    window.searchByTag = searchByTag;
+    window.saveHuman = saveHuman;
+    window.vote = vote;
+    window.addComment = addComment;
+    window.openModal = openModal;
+    window.closeModal = closeModal;
+
 </script>
 </body>
 </html>
