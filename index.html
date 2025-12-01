@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HumanDex - 人類圖鑑</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <!-- Nes.css -->
+    <link href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --font-en: 'Press Start 2P', cursive;
+            --font-zh: 'Noto Sans TC', sans-serif;
+            --bg-color: #212529;
+            --card-bg: #fff;
+            --toxic-color: #e76e55;
+            --good-color: #92cc41;
+        }
+
+        body {
+            font-family: var(--font-zh);
+            background-color: var(--bg-color);
+            padding-bottom: 100px;
+            color: #fff;
+        }
+
+        .retro-font { font-family: var(--font-en); }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 標題區 */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 4px solid #fff;
+            padding-bottom: 20px;
+        }
+        .logo {
+            font-family: var(--font-en);
+            font-size: 1.8rem;
+            color: #f7d51d;
+            text-shadow: 4px 4px #000;
+            margin-bottom: 10px;
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            background: #333;
+            padding: 15px;
+            border: 4px solid #fff;
+            margin-bottom: 30px;
+        }
+        .search-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filters-row { display: flex; flex-wrap: wrap; gap: 15px; justify-content: space-between; }
+        .category-group, .sort-group { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        /* 自定義 Radio */
+        .nes-radio-btn { display: none; }
+        .nes-radio-label {
+            cursor: pointer; padding: 5px 10px; border: 2px solid #fff;
+            font-size: 0.8rem; transition: all 0.2s;
+        }
+        .nes-radio-btn:checked + .nes-radio-label {
+            background-color: #fff; color: #000; box-shadow: 2px 2px 0px #aaa;
+        }
+
+        /* 卡片網格 */
+        .dex-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .human-card {
+            background-color: var(--card-bg);
+            color: #212529;
+            transition: transform 0.2s;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .human-card:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+
+        /* Rank Badge: 顯示 NO.xxx */
+        .rank-badge {
+            position: absolute;
+            top: -12px;
+            left: -10px;
+            background: #212529;
+            color: #f7d51d;
+            padding: 5px 8px;
+            font-family: var(--font-en);
+            font-size: 0.8rem;
+            border: 2px solid #fff;
+            z-index: 5;
+            box-shadow: 3px 3px 0 #000;
+        }
+
+        /* 卡片頭部：佈局修正 */
+        .card-header {
+            display: flex;
+            gap: 15px;
+            border-bottom: 3px solid #212529;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+
+        .avatar {
+            width: 70px; height: 70px;
+            background: #eee;
+            image-rendering: pixelated;
+            border: 3px solid #212529;
+            flex-shrink: 0;
+        }
+
+        .info-col {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .human-name {
+            font-size: 1.1rem;
+            font-weight: 900;
+            line-height: 1.2;
+            margin-top: 2px;
+        }
+
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .custom-tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border: 2px solid #000;
+            line-height: 1;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+        }
+        .tag-category { background: #cecece; color: #000; }
+        .tag-toxic { background: var(--toxic-color); color: #fff; }
+        .tag-good { background: var(--good-color); color: #fff; }
+
+        .stats-area { margin-bottom: 15px; }
+        .stats-label {
+            display: flex; justify-content: space-between;
+            font-size: 0.75rem; margin-bottom: 5px; font-family: var(--font-en);
+        }
+
+        .traits-container {
+            margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .trait-tag {
+            font-size: 0.8rem;
+            background: #e0e0e0; padding: 4px 8px;
+            border: 2px solid #ccc; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .trait-tag:hover { background: #d4d4d4; border-color: #999; }
+
+        .story-box {
+            font-size: 0.9rem; line-height: 1.6;
+            background: #f8f9fa; padding: 10px;
+            border: 2px dashed #adb5bd; margin-bottom: 15px;
+            flex-grow: 1;
+        }
+
+        .vote-btn { width: 100%; font-family: var(--font-zh); font-weight: bold; margin-bottom: 5px; }
+        
+        /* --- 新增：留言區樣式 --- */
+        .comments-section {
+            margin-top: 15px;
+            border-top: 2px dashed #ccc;
+            padding-top: 10px;
+        }
+        .comments-title {
+            font-size: 0.75rem;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .comment-list {
+            max-height: 80px;
+            overflow-y: auto;
+            background: #f0f0f0;
+            padding: 5px;
+            margin-bottom: 8px;
+            font-size: 0.7rem;
+            border: 2px solid #ddd;
+        }
+        .comment-item {
+            padding: 4px 0;
+            border-bottom: 1px dashed #ccc;
+            word-break: break-all;
+            color: #333;
+            text-align: left;
+        }
+        .comment-item:last-child { border-bottom: none; }
+        
+        .comment-input-row {
+            display: flex;
+            gap: 5px;
+        }
+        .comment-input-row input {
+            font-size: 0.7rem;
+            padding: 4px;
+            height: auto; 
+            min-height: 0;
+        }
+        .comment-btn {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            height: auto;
+            min-height: 0;
+        }
+
+        .fab { position: fixed; bottom: 30px; right: 30px; box-shadow: 4px 4px 0px #000; z-index: 100; }
+        #create-modal {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.85);
+            z-index: 999; justify-content: center; align-items: center; padding: 10px;
+        }
+        .modal-content {
+            background: #fff; color: #000; max-width: 600px; width: 100%;
+            max-height: 90vh; overflow-y: auto; border: 4px solid #000;
+        }
+
+        .is-toxic .nes-progress::-webkit-progress-value { background-color: var(--toxic-color); }
+        .is-toxic .nes-progress::-moz-progress-bar { background-color: var(--toxic-color); }
+        .is-toxic .nes-progress { color: var(--toxic-color); }
+        .is-good .nes-progress::-webkit-progress-value { background-color: var(--good-color); }
+        .is-good .nes-progress::-moz-progress-bar { background-color: var(--good-color); }
+        .is-good .nes-progress { color: var(--good-color); }
+
+        @media (max-width: 600px) {
+            .filters-row { flex-direction: column; }
+            .category-group, .sort-group { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header">
+        <div class="logo">
+            <i class="nes-icon coin is-large"></i> HumanDex
+        </div>
+        <p style="opacity: 0.8; letter-spacing: 1px;">這個世界什麼人都有，這裡都有紀錄。</p>
+    </header>
+
+    <div class="control-panel">
+        <div class="search-row">
+            <input type="text" id="search-input" class="nes-input" placeholder="搜尋代號或標籤 (Enter)..." onkeyup="handleSearch(event)">
+            <button class="nes-btn is-primary" onclick="applyFilters()">搜尋</button>
+        </div>
+
+        <div class="filters-row">
+            <div class="category-group">
+                <label><input type="radio" class="nes-radio-btn" name="cat-filter" value="all" checked onchange="applyFilters()"><span class="nes-radio-label">全部</span></label>
+                <label><input type="radio" class="nes-radio-btn" name="cat-filter" value="work" onchange="applyFilters()"><span class="nes-radio-label">職場</span></label>
+                <label><input type="radio" class="nes-radio-btn" name="cat-filter" value="family" onchange="applyFilters()"><span class="nes-radio-label">家庭</span></label>
+                <label><input type="radio" class="nes-radio-btn" name="cat-filter" value="love" onchange="applyFilters()"><span class="nes-radio-label">戀愛</span></label>
+                <label><input type="radio" class="nes-radio-btn" name="cat-filter" value="friend" onchange="applyFilters()"><span class="nes-radio-label">朋友</span></label>
+            </div>
+            <div class="sort-group">
+                <label><input type="radio" class="nes-radio-btn" name="sort-by" value="hot" checked onchange="applyFilters()"><span class="nes-radio-label">🔥 熱門</span></label>
+                <label><input type="radio" class="nes-radio-btn" name="sort-by" value="new" onchange="applyFilters()"><span class="nes-radio-label">🆕 最新</span></label>
+            </div>
+        </div>
+        <div style="margin-top: 15px; font-size: 0.8rem; text-align: right;">
+            圖鑑收錄: <span id="total-count" class="retro-font">0</span>
+        </div>
+    </div>
+
+    <div id="dex-grid" class="dex-grid"></div>
+</div>
+
+<button type="button" class="nes-btn is-success fab" onclick="openModal()"><span>+ 捕捉</span></button>
+
+<!-- Modal -->
+<div id="create-modal">
+    <div class="nes-container with-title is-centered modal-content">
+        <p class="title">記錄新遭遇</p>
+        <div style="text-align: left;">
+            <div class="nes-field">
+                <label>代號 (請勿使用真名)</label>
+                <input type="text" id="input-name" class="nes-input" placeholder="例: 禿頭慣老闆">
+            </div>
+            <div style="margin-top: 15px;">
+                <label>分類 (Category)</label>
+                <div class="nes-select">
+                    <select id="input-category">
+                        <option value="work">職場 (Work)</option>
+                        <option value="family">家庭 (Family)</option>
+                        <option value="love">戀愛 (Love)</option>
+                        <option value="friend">朋友 (Friend)</option>
+                        <option value="other">其他 (Other)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <label>屬性 (Type)</label>
+                <div>
+                    <label><input type="radio" class="nes-radio" name="type-choice" value="toxic" checked /><span>爛人 (Toxic)</span></label>
+                    <label><input type="radio" class="nes-radio" name="type-choice" value="good" /><span>好人 (Good)</span></label>
+                </div>
+            </div>
+            <div class="nes-field" style="margin-top: 15px;">
+                <label>程度 LV (1-100)</label>
+                <input type="range" id="input-level" min="1" max="100" value="50" class="nes-range" oninput="document.getElementById('level-val').innerText=this.value">
+                <div style="text-align: right;">數值: <span id="level-val" class="retro-font">50</span></div>
+            </div>
+            <div class="nes-field" style="margin-top: 15px;">
+                <label>特徵 (用逗號分開)</label>
+                <input type="text" id="input-traits" class="nes-input" placeholder="例: 遲到, 愛說謊">
+            </div>
+            <div class="nes-field" style="margin-top: 15px;">
+                <label>情報</label>
+                <textarea id="input-story" class="nes-textarea" rows="4"></textarea>
+            </div>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+            <button class="nes-btn" onclick="closeModal()">取消</button>
+            <button class="nes-btn is-primary" onclick="saveHuman()">登錄</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'humanDex_v4_comments'; // 更新 Key 以避免舊資料結構問題
+    let humanList = [];
+
+    const CAT_MAP = {
+        'work': '職場版',
+        'family': '家庭版',
+        'love': '戀愛版',
+        'friend': '朋友版',
+        'other': '綜合版'
+    };
+
+    const seedData = [
+        {
+            id: 1700000000001,
+            name: "情緒勒索怪",
+            category: "family",
+            type: "toxic",
+            level: 95,
+            traits: ["我是為你好", "易怒", "雙重標準"],
+            story: "每次回家如果不照他的意思做，就開始摔東西，然後說自己養家多辛苦，都是為了我好。",
+            votes: 1240,
+            comments: ["真的，我家那個也是這樣！", "辛苦了..."], // 種子資料示範
+            timestamp: 1700000000001
+        },
+        {
+            id: 1700000000002,
+            name: "天使房東",
+            category: "other",
+            type: "good",
+            level: 100,
+            traits: ["不漲房租", "修繕秒回", "送水果"],
+            story: "疫情期間主動說這兩個月房租減半，還會定時放水果在門口，根本是活菩薩。",
+            votes: 89,
+            comments: ["哪裡有這種房東求介紹"],
+            timestamp: 1700000000002
+        },
+        {
+            id: 1700000000003,
+            name: "薪水小偷",
+            category: "work",
+            type: "toxic",
+            level: 60,
+            traits: ["消失", "推卸責任", "裝忙"],
+            story: "只要主管不在位置上，他就會消失去廁所或是茶水間，一消失就是半小時。",
+            votes: 450,
+            comments: [],
+            timestamp: 1700000000003
+        }
+    ];
+
+    window.onload = function() {
+        loadData();
+        applyFilters();
+    };
+
+    function loadData() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        humanList = stored ? JSON.parse(stored) : seedData;
+        if (!stored) saveData();
+    }
+
+    function saveData() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(humanList));
+    }
+
+    function renderGrid(data) {
+        const grid = document.getElementById('dex-grid');
+        document.getElementById('total-count').innerText = data.length;
+        grid.innerHTML = '';
+
+        if (data.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px;">找不到相關人類...</div>';
+            return;
+        }
+
+        const chronologicalList = [...humanList].sort((a, b) => a.timestamp - b.timestamp);
+
+        data.forEach(human => {
+            const isToxic = human.type === 'toxic';
+            const catName = CAT_MAP[human.category] || '綜合版';
+            
+            const absoluteRank = chronologicalList.findIndex(h => h.id === human.id) + 1;
+            const rankNum = String(absoluteRank).padStart(3, '0');
+
+            const avatarUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(human.name)}`;
+            
+            const traitsHtml = human.traits.map(t => 
+                `<span class="trait-tag" onclick="searchByTag('${escapeHtml(t)}')">#${escapeHtml(t)}</span>`
+            ).join('');
+
+            // --- 留言 HTML 產生邏輯 ---
+            const comments = human.comments || []; // 防呆
+            const commentsHtml = comments.length > 0
+                ? comments.map(c => `<div class="comment-item">User: ${escapeHtml(c)}</div>`).join('')
+                : '<div style="color:#999; padding:2px;">尚無留言...</div>';
+
+            const cardHTML = `
+                <div class="nes-container human-card ${isToxic ? 'is-toxic' : 'is-good'}">
+                    <div class="rank-badge">NO.${rankNum}</div>
+                    
+                    <div class="card-header">
+                        <img src="${avatarUrl}" class="avatar" alt="avatar">
+                        <div class="info-col">
+                            <div class="human-name">${escapeHtml(human.name)}</div>
+                            <div class="badge-row">
+                                <span class="custom-tag tag-category">${catName}</span>
+                                <span class="custom-tag ${isToxic ? 'tag-toxic' : 'tag-good'}">
+                                    ${isToxic ? '爛人' : '好人'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stats-area">
+                        <div class="stats-label">
+                            <span>${isToxic ? '危險度' : '稀有度'}</span>
+                            <span>LV.${human.level} (${human.level}%)</span>
+                        </div>
+                        <progress class="nes-progress ${isToxic ? 'is-error' : 'is-success'}" value="${human.level}" max="100"></progress>
+                    </div>
+
+                    <div class="traits-container">${traitsHtml}</div>
+                    <div class="story-box">"${escapeHtml(human.story)}"</div>
+
+                    <button class="nes-btn ${isToxic ? 'is-warning' : 'is-primary'} vote-btn" onclick="vote(${human.id})">
+                        ${isToxic ? '💩 我也遇過' : '❤️ 讚嘆好人'} <span class="retro-font">(${human.votes})</span>
+                    </button>
+
+                    <!-- 留言區塊 -->
+                    <div class="comments-section">
+                        <div class="comments-title">留言板 (${comments.length})</div>
+                        <div class="comment-list" id="list-${human.id}">
+                            ${commentsHtml}
+                        </div>
+                        <div class="comment-input-row">
+                            <input type="text" id="input-${human.id}" class="nes-input" placeholder="留個言...">
+                            <button class="nes-btn is-primary comment-btn" onclick="addComment(${human.id})">送出</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            grid.innerHTML += cardHTML;
+        });
+    }
+
+    function applyFilters() {
+        const searchText = document.getElementById('search-input').value.toLowerCase().trim();
+        const catFilter = document.querySelector('input[name="cat-filter"]:checked').value;
+        const sortBy = document.querySelector('input[name="sort-by"]:checked').value;
+
+        let filtered = humanList.filter(h => {
+            if (catFilter !== 'all' && h.category !== catFilter) return false;
+            if (searchText) {
+                return h.name.toLowerCase().includes(searchText) || h.traits.some(t => t.toLowerCase().includes(searchText));
+            }
+            return true;
+        });
+
+        if (sortBy === 'hot') {
+            filtered.sort((a, b) => b.votes - a.votes);
+        } else {
+            filtered.sort((a, b) => b.timestamp - a.timestamp);
+        }
+
+        renderGrid(filtered);
+    }
+
+    function handleSearch(e) { if (e.key === 'Enter') applyFilters(); }
+    function searchByTag(tag) {
+        document.getElementById('search-input').value = tag;
+        applyFilters();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function vote(id) {
+        const target = humanList.find(h => h.id === id);
+        if (target) {
+            target.votes += 1;
+            saveData();
+            applyFilters();
+        }
+    }
+
+    // --- 新增：處理留言功能 ---
+    function addComment(id) {
+        const inputEl = document.getElementById(`input-${id}`);
+        const text = inputEl.value.trim();
+
+        if (!text) return; // 空白不送出
+
+        const target = humanList.find(h => h.id === id);
+        if (target) {
+            if (!target.comments) target.comments = []; // 初始化
+            target.comments.push(text);
+            saveData();
+            applyFilters(); // 重新渲染更新
+        }
+    }
+
+    function openModal() { document.getElementById('create-modal').style.display = 'flex'; }
+    function closeModal() {
+        document.getElementById('create-modal').style.display = 'none';
+        document.getElementById('input-name').value = '';
+        document.getElementById('input-traits').value = '';
+        document.getElementById('input-story').value = '';
+    }
+
+    function saveHuman() {
+        const name = document.getElementById('input-name').value;
+        const story = document.getElementById('input-story').value;
+        const traitsStr = document.getElementById('input-traits').value;
+        const level = parseInt(document.getElementById('input-level').value);
+        const type = document.querySelector('input[name="type-choice"]:checked').value;
+        const category = document.getElementById('input-category').value;
+
+        if (!name || !story) return alert("請輸入資料！");
+
+        const newHuman = {
+            id: Date.now(),
+            name, category, type, level, story,
+            traits: traitsStr.split(/[,，]/).map(t => t.trim()).filter(t => t),
+            votes: 1,
+            comments: [], // 新增時初始化 comments
+            timestamp: Date.now()
+        };
+
+        humanList.push(newHuman);
+        saveData();
+        closeModal();
+        
+        document.querySelector('input[value="all"]').checked = true;
+        document.querySelector('input[value="new"]').checked = true;
+        applyFilters();
+    }
+
+    function escapeHtml(text) {
+        return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : '';
+    }
+</script>
+</body>
+</html>
